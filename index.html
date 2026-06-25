@@ -15,7 +15,6 @@
             touch-action: pan-y;
         }
 
-        /* ---------- PASSWORD SCREENS ---------- */
         #login-screen {
             width: 100%; height: 100%;
             display: flex; flex-direction: column;
@@ -42,11 +41,7 @@
         .error-msg { color: #ff3b30; margin-top: 8px; font-size: 14px; }
         .lockout-timer { margin-top: 16px; font-size: 20px; font-weight: bold; color: #ff9500; }
 
-        /* ---------- MAIN APP ---------- */
-        #app {
-            display: none; width: 100%; height: 100%;
-            position: relative; background: #000;
-        }
+        #app { display: none; width: 100%; height: 100%; position: relative; background: #000; }
         #feed-container {
             width: 100%; height: 100%;
             overflow-y: scroll;
@@ -63,9 +58,8 @@
             position: relative; background: #000;
         }
         .feed-item img, .feed-item video {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;       /* fits without cropping, touches edges based on aspect ratio */
+            width: 100%; height: 100%;
+            object-fit: contain;
         }
         .no-media-message {
             position: absolute; top: 50%; left: 50%;
@@ -79,7 +73,6 @@
             font-size: 16px; cursor: pointer;
         }
 
-        /* ---------- UI OVERLAY (right side) ---------- */
         #ui-overlay {
             position: fixed; right: 12px; bottom: 80px;
             display: flex; flex-direction: column; align-items: center;
@@ -97,7 +90,6 @@
         .like-btn.liked { color: #ff2d55; }
         .mute-btn { font-size: 24px; }
 
-        /* ---------- FULLSCREEN ---------- */
         #fullscreen-exit {
             position: fixed; top: 16px; left: 16px;
             background: rgba(0,0,0,0.5); border: none;
@@ -109,7 +101,6 @@
         body.fullscreen-mode #ui-overlay { display: none; }
         body.fullscreen-mode #fullscreen-exit { display: flex; }
 
-        /* ---------- MODAL (more options) ---------- */
         .modal-backdrop {
             position: fixed; top:0; left:0; width:100%; height:100%;
             background: rgba(0,0,0,0.8); z-index: 30;
@@ -142,7 +133,6 @@
 </head>
 <body>
 
-    <!-- ========== LOGIN / SETUP ========== -->
     <div id="login-screen">
         <h2 id="login-title">🔐 MediaFeed</h2>
         <div id="password-fields">
@@ -157,11 +147,9 @@
         <div id="error-message" class="error-msg"></div>
     </div>
 
-    <!-- ========== MAIN APP ========== -->
     <div id="app">
         <div id="feed-container"></div>
 
-        <!-- UI overlay (right buttons) -->
         <div id="ui-overlay">
             <button id="btn-like" class="like-btn" title="Like">♥</button>
             <button id="btn-comment" title="Comment (coming soon)">💬</button>
@@ -170,15 +158,15 @@
             <button id="btn-more" title="More options">⋯</button>
         </div>
 
-        <!-- Fullscreen exit button -->
         <button id="fullscreen-exit">←</button>
 
-        <!-- Modal backdrop -->
         <div class="modal-backdrop" id="modal-backdrop">
             <div class="modal-content">
                 <h3>Options</h3>
                 <button class="btn-primary" id="btn-add-media">＋ Add Media</button>
                 <button class="btn-primary" id="btn-add-folder">📁 Add Folder</button>
+                <button class="btn-primary" id="btn-add-url">🔗 Add from URL</button>
+                <button class="btn-primary" id="btn-import-zip">📦 Import ZIP</button>
                 <div class="setting-row">
                     <span>Auto‑scroll</span>
                     <input type="checkbox" id="autoscroll-toggle">
@@ -197,20 +185,21 @@
             </div>
         </div>
 
-        <!-- Hidden file inputs -->
         <input type="file" id="file-input" accept="image/*,video/*" multiple style="display:none;">
         <input type="file" id="folder-input" webkitdirectory multiple style="display:none;">
+        <input type="file" id="zip-input" accept=".zip" style="display:none;">
     </div>
+
+    <!-- JSZip library for ZIP extraction -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
     <script>
         (function() {
-            // ---------- CONSTANTS ----------
             const MAX_ATTEMPTS = 2;
             const LOCKOUT_DURATION = 5 * 60 * 1000;
             const DB_NAME = 'MediaFeedDB';
             const DB_STORE = 'media';
 
-            // ---------- GLOBALS ----------
             let db = null;
             let feedOrder = [];
             let currentActiveIndex = 0;
@@ -223,7 +212,6 @@
             let autoScrollIntervalSec = 5;
             let videoPlaybacksSetting = 1;
 
-            // ---------- DOM ELEMENTS ----------
             const loginScreen = document.getElementById('login-screen');
             const appDiv = document.getElementById('app');
             const feedContainer = document.getElementById('feed-container');
@@ -234,8 +222,8 @@
             const modalBackdrop = document.getElementById('modal-backdrop');
             const fileInput = document.getElementById('file-input');
             const folderInput = document.getElementById('folder-input');
+            const zipInput = document.getElementById('zip-input');
 
-            // Password elements
             const passwordInput = document.getElementById('password-input');
             const passwordConfirm = document.getElementById('password-confirm');
             const passwordSubmit = document.getElementById('password-submit');
@@ -245,7 +233,6 @@
             const errorMsg = document.getElementById('error-message');
             const passwordFieldsDiv = document.getElementById('password-fields');
 
-            // ---------- UTILS ----------
             async function sha256(message) {
                 const msgBuffer = new TextEncoder().encode(message);
                 const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
@@ -260,7 +247,6 @@
                 return `${min}:${sec.toString().padStart(2, '0')}`;
             }
 
-            // ---------- INDEXEDDB ----------
             function openDB() {
                 return new Promise((resolve, reject) => {
                     const request = indexedDB.open(DB_NAME, 1);
@@ -270,13 +256,8 @@
                             db.createObjectStore(DB_STORE, { keyPath: 'id', autoIncrement: true });
                         }
                     };
-                    request.onsuccess = (event) => {
-                        db = event.target.result;
-                        resolve(db);
-                    };
-                    request.onerror = (event) => {
-                        reject(event.target.error);
-                    };
+                    request.onsuccess = (event) => { db = event.target.result; resolve(db); };
+                    request.onerror = (event) => reject(event.target.error);
                 });
             }
 
@@ -317,33 +298,23 @@
                 });
             }
 
-            // ---------- PASSWORD & LOCKOUT ----------
+            // ---------- PASSWORD ----------
             function getLockData() {
                 const attempts = parseInt(localStorage.getItem('failedAttempts') || '0', 10);
                 const lockUntil = parseInt(localStorage.getItem('lockUntil') || '0', 10);
                 return { attempts, lockUntil };
             }
-
             function setLockData(attempts, lockUntil) {
                 localStorage.setItem('failedAttempts', attempts);
-                if (lockUntil) {
-                    localStorage.setItem('lockUntil', lockUntil.toString());
-                } else {
-                    localStorage.removeItem('lockUntil');
-                }
+                if (lockUntil) localStorage.setItem('lockUntil', lockUntil.toString());
+                else localStorage.removeItem('lockUntil');
             }
-
             function checkLockout() {
-                const { attempts, lockUntil } = getLockData();
-                if (lockUntil && Date.now() < lockUntil) {
-                    return true;
-                }
-                if (lockUntil && Date.now() >= lockUntil) {
-                    setLockData(0, null);
-                }
+                const { lockUntil } = getLockData();
+                if (lockUntil && Date.now() < lockUntil) return true;
+                if (lockUntil && Date.now() >= lockUntil) setLockData(0, null);
                 return false;
             }
-
             function startLockoutTimer() {
                 const { lockUntil } = getLockData();
                 if (!lockUntil) return;
@@ -366,25 +337,17 @@
 
             async function handlePassword() {
                 const storedHash = localStorage.getItem('passwordHash');
-                const inputVal = passwordInput.value;
-
+                const inputVal = passwordInput.value.trim();
                 if (!storedHash) {
-                    const confirmVal = passwordConfirm.value;
-                    if (!inputVal || inputVal.length < 4) {
-                        errorMsg.textContent = 'Password must be at least 4 characters.';
-                        return;
-                    }
-                    if (inputVal !== confirmVal) {
-                        errorMsg.textContent = 'Passwords do not match.';
-                        return;
-                    }
+                    const confirmVal = passwordConfirm.value.trim();
+                    if (!inputVal || inputVal.length < 4) { errorMsg.textContent = 'Password must be at least 4 characters.'; return; }
+                    if (inputVal !== confirmVal) { errorMsg.textContent = 'Passwords do not match.'; return; }
                     const hash = await sha256(inputVal);
                     localStorage.setItem('passwordHash', hash);
                     sessionStorage.setItem('loggedIn', 'true');
                     showApp();
                     return;
                 }
-
                 const hash = await sha256(inputVal);
                 if (hash === storedHash) {
                     setLockData(0, null);
@@ -421,7 +384,6 @@
                 passwordFieldsDiv.style.display = 'block';
                 lockoutDiv.style.display = 'none';
                 errorMsg.textContent = '';
-
                 if (checkLockout()) {
                     passwordFieldsDiv.style.display = 'none';
                     startLockoutTimer();
@@ -429,10 +391,10 @@
             }
 
             passwordSubmit.addEventListener('click', handlePassword);
-            passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handlePassword(); });
-            passwordConfirm.addEventListener('keydown', (e) => { if (e.key === 'Enter') handlePassword(); });
+            passwordInput.addEventListener('keydown', e => { if (e.key === 'Enter') handlePassword(); });
+            passwordConfirm.addEventListener('keydown', e => { if (e.key === 'Enter') handlePassword(); });
 
-            // ---------- MEDIA FEED BUILDING ----------
+            // ---------- FEED ----------
             async function loadFeed() {
                 const allMedia = await getAllMedia();
                 if (allMedia.length === 0) {
@@ -444,7 +406,6 @@
                     feedOrder = [];
                     return;
                 }
-
                 const shuffled = [...allMedia];
                 for (let i = shuffled.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
@@ -452,14 +413,12 @@
                 }
                 feedOrder = shuffled.map(item => item.id);
                 currentActiveIndex = 0;
-
                 feedContainer.innerHTML = '';
                 shuffled.forEach((item, index) => {
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'feed-item';
                     itemDiv.dataset.id = item.id;
                     itemDiv.dataset.index = index;
-
                     const blobUrl = URL.createObjectURL(item.data);
                     if (item.type.startsWith('video/')) {
                         const video = document.createElement('video');
@@ -480,7 +439,6 @@
                     }
                     feedContainer.appendChild(itemDiv);
                 });
-
                 setupIntersectionObserver();
                 updateActiveItemUI(0);
                 scheduleAutoScroll(0);
@@ -489,18 +447,13 @@
             function setupIntersectionObserver() {
                 const observer = new IntersectionObserver((entries) => {
                     entries.forEach(entry => {
-                        if (entry.isIntersecting && entry.target === feedContainer.children[currentActiveIndex]) {
-                            return;
-                        }
+                        if (entry.isIntersecting && entry.target === feedContainer.children[currentActiveIndex]) return;
                         if (entry.isIntersecting) {
                             const index = parseInt(entry.target.dataset.index, 10);
-                            if (!isNaN(index) && index !== currentActiveIndex) {
-                                changeActiveItem(index);
-                            }
+                            if (!isNaN(index) && index !== currentActiveIndex) changeActiveItem(index);
                         }
                     });
                 }, { threshold: 0.6 });
-
                 Array.from(feedContainer.children).forEach(child => observer.observe(child));
             }
 
@@ -515,9 +468,7 @@
             function getMediaElement(index) {
                 const child = feedContainer.children[index];
                 if (!child) return null;
-                const video = child.querySelector('video');
-                const img = child.querySelector('img');
-                return { video, img, child };
+                return { video: child.querySelector('video'), img: child.querySelector('img'), child };
             }
 
             function pauseCurrentVideo() {
@@ -541,21 +492,17 @@
             }
 
             function updateActiveItemUI(index) {
+                if (feedOrder.length === 0) return;
                 const mediaId = feedOrder[index];
                 getAllMedia().then(all => {
                     const item = all.find(m => m.id === mediaId);
-                    if (item) {
-                        likeBtn.classList.toggle('liked', item.liked);
-                    }
+                    if (item) likeBtn.classList.toggle('liked', item.liked);
                 });
             }
 
             // ---------- AUTO SCROLL ----------
             function clearAutoScrollTimers() {
-                if (autoScrollTimeout) {
-                    clearTimeout(autoScrollTimeout);
-                    autoScrollTimeout = null;
-                }
+                if (autoScrollTimeout) { clearTimeout(autoScrollTimeout); autoScrollTimeout = null; }
                 if (currentVideoElement && videoEndedListener) {
                     currentVideoElement.removeEventListener('ended', videoEndedListener);
                     videoEndedListener = null;
@@ -565,28 +512,22 @@
             function scheduleAutoScroll(index) {
                 clearAutoScrollTimers();
                 if (!autoScrollEnabled || feedOrder.length === 0) return;
-
                 const mediaId = feedOrder[index];
                 getAllMedia().then(all => {
                     const item = all.find(m => m.id === mediaId);
                     if (!item) return;
-
                     if (item.type.startsWith('video/') && videoPlaybacksSetting > 0) {
                         const { video } = getMediaElement(index);
                         if (video) {
                             videoPlaybackCounter = 0;
                             videoEndedListener = () => {
                                 videoPlaybackCounter++;
-                                if (videoPlaybackCounter >= videoPlaybacksSetting) {
-                                    scrollToNext();
-                                }
+                                if (videoPlaybackCounter >= videoPlaybacksSetting) scrollToNext();
                             };
                             video.addEventListener('ended', videoEndedListener);
                         }
                     } else {
-                        autoScrollTimeout = setTimeout(() => {
-                            scrollToNext();
-                        }, autoScrollIntervalSec * 1000);
+                        autoScrollTimeout = setTimeout(() => scrollToNext(), autoScrollIntervalSec * 1000);
                     }
                 });
             }
@@ -595,9 +536,7 @@
                 if (feedOrder.length === 0) return;
                 const nextIndex = (currentActiveIndex + 1) % feedOrder.length;
                 const nextChild = feedContainer.children[nextIndex];
-                if (nextChild) {
-                    nextChild.scrollIntoView({ behavior: 'smooth' });
-                }
+                if (nextChild) nextChild.scrollIntoView({ behavior: 'smooth' });
             }
 
             // ---------- LIKE ----------
@@ -620,14 +559,10 @@
                 muteBtn.textContent = muted ? '🔇' : '🔊';
                 document.getElementById('btn-mute2').textContent = muted ? '🔇 Unmute' : '🔊 Mute';
             }
-
             muteBtn.addEventListener('click', () => setGlobalMute(!audioMuted));
             document.getElementById('btn-mute2').addEventListener('click', () => setGlobalMute(!audioMuted));
-
             const savedMute = localStorage.getItem('audioMuted');
-            if (savedMute !== null) {
-                audioMuted = savedMute === '1';
-            }
+            if (savedMute !== null) audioMuted = savedMute === '1';
             muteBtn.textContent = audioMuted ? '🔇' : '🔊';
 
             // ---------- FULLSCREEN ----------
@@ -635,19 +570,15 @@
                 document.body.classList.add('fullscreen-mode');
                 modalBackdrop.classList.remove('active');
             });
-            fullscreenExitBtn.addEventListener('click', () => {
-                document.body.classList.remove('fullscreen-mode');
-            });
+            fullscreenExitBtn.addEventListener('click', () => document.body.classList.remove('fullscreen-mode'));
 
             // ---------- MORE OPTIONS MODAL ----------
             const autoscrollToggle = document.getElementById('autoscroll-toggle');
             const autoscrollIntervalInput = document.getElementById('autoscroll-interval');
             const videoPlaybacksInput = document.getElementById('video-playbacks');
-
             autoScrollEnabled = localStorage.getItem('autoScrollEnabled') === 'true';
             autoScrollIntervalSec = parseInt(localStorage.getItem('autoScrollIntervalSec') || '5', 10);
             videoPlaybacksSetting = parseInt(localStorage.getItem('videoPlaybacks') || '1', 10);
-
             autoscrollToggle.checked = autoScrollEnabled;
             autoscrollIntervalInput.value = autoScrollIntervalSec;
             videoPlaybacksInput.value = videoPlaybacksSetting;
@@ -659,77 +590,115 @@
                 localStorage.setItem('autoScrollEnabled', autoScrollEnabled);
                 localStorage.setItem('autoScrollIntervalSec', autoScrollIntervalSec);
                 localStorage.setItem('videoPlaybacks', videoPlaybacksSetting);
-                if (autoScrollEnabled) {
-                    scheduleAutoScroll(currentActiveIndex);
-                } else {
-                    clearAutoScrollTimers();
-                }
+                if (autoScrollEnabled) scheduleAutoScroll(currentActiveIndex);
+                else clearAutoScrollTimers();
             }
-
             autoscrollToggle.addEventListener('change', saveAutoScrollSettings);
             autoscrollIntervalInput.addEventListener('input', saveAutoScrollSettings);
             videoPlaybacksInput.addEventListener('input', saveAutoScrollSettings);
 
-            document.getElementById('btn-more').addEventListener('click', () => {
-                modalBackdrop.classList.add('active');
-            });
-            document.getElementById('btn-close-modal').addEventListener('click', () => {
-                modalBackdrop.classList.remove('active');
-            });
-            modalBackdrop.addEventListener('click', (e) => {
-                if (e.target === modalBackdrop) modalBackdrop.classList.remove('active');
-            });
+            document.getElementById('btn-more').addEventListener('click', () => modalBackdrop.classList.add('active'));
+            document.getElementById('btn-close-modal').addEventListener('click', () => modalBackdrop.classList.remove('active'));
+            modalBackdrop.addEventListener('click', e => { if (e.target === modalBackdrop) modalBackdrop.classList.remove('active'); });
 
-            // ---------- ADD MEDIA (individual files) ----------
-            document.getElementById('btn-add-media').addEventListener('click', () => {
-                fileInput.click();
-                modalBackdrop.classList.remove('active');
-            });
-
+            // ---------- ADD MEDIA (files) ----------
+            document.getElementById('btn-add-media').addEventListener('click', () => { fileInput.click(); modalBackdrop.classList.remove('active'); });
             fileInput.addEventListener('change', async (e) => {
-                const files = Array.from(e.target.files);
-                await addFilesToDB(files);
+                await addFilesToDB(Array.from(e.target.files));
                 fileInput.value = '';
                 loadFeed();
             });
 
             // ---------- ADD FOLDER ----------
-            document.getElementById('btn-add-folder').addEventListener('click', () => {
-                folderInput.click();
-                modalBackdrop.classList.remove('active');
-            });
-
+            document.getElementById('btn-add-folder').addEventListener('click', () => { folderInput.click(); modalBackdrop.classList.remove('active'); });
             folderInput.addEventListener('change', async (e) => {
-                const files = Array.from(e.target.files).filter(file => 
-                    file.type.startsWith('image/') || file.type.startsWith('video/')
-                );
-                if (files.length === 0) {
-                    alert('No image or video files found in the selected folder.');
-                } else {
-                    await addFilesToDB(files);
-                }
+                const files = Array.from(e.target.files).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+                if (files.length === 0) alert('No image or video files found.');
+                else await addFilesToDB(files);
                 folderInput.value = '';
                 loadFeed();
+            });
+
+            // ---------- ADD FROM URL ----------
+            document.getElementById('btn-add-url').addEventListener('click', () => {
+                modalBackdrop.classList.remove('active');
+                const url = prompt('Paste the direct URL of an image/video:');
+                if (!url) return;
+                try { new URL(url); } catch { alert('Invalid URL'); return; }
+                fetch(url)
+                    .then(res => res.blob())
+                    .then(async blob => {
+                        const filename = url.split('/').pop().split('?')[0] || 'unknown';
+                        await addMediaItem({ data: blob, type: blob.type || 'image/png', filename, liked: false });
+                        loadFeed();
+                    })
+                    .catch(() => alert('Failed to load media. Check the URL.'));
+            });
+
+            // ---------- IMPORT ZIP ----------
+            document.getElementById('btn-import-zip').addEventListener('click', () => {
+                modalBackdrop.classList.remove('active');
+                zipInput.click();
+            });
+
+            zipInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                try {
+                    const zip = await JSZip.loadAsync(file);
+                    const mediaFiles = [];
+                    // Collect all image/video entries
+                    zip.forEach((relativePath, zipEntry) => {
+                        if (!zipEntry.dir) {
+                            const name = relativePath.split('/').pop(); // filename
+                            const ext = name.split('.').pop().toLowerCase();
+                            const imageExts = ['jpg','jpeg','png','gif','webp','bmp','svg'];
+                            const videoExts = ['mp4','webm','ogg','mov','avi','mkv'];
+                            if (imageExts.includes(ext) || videoExts.includes(ext)) {
+                                mediaFiles.push({ zipEntry, name });
+                            }
+                        }
+                    });
+                    if (mediaFiles.length === 0) {
+                        alert('No image or video files found in the ZIP.');
+                        zipInput.value = '';
+                        return;
+                    }
+                    let added = 0;
+                    for (const { zipEntry, name } of mediaFiles) {
+                        const blob = await zipEntry.async('blob');
+                        const type = zipEntry.name.endsWith('.mp4') ? 'video/mp4' :
+                                     zipEntry.name.endsWith('.webm') ? 'video/webm' :
+                                     zipEntry.name.endsWith('.ogg') ? 'video/ogg' :
+                                     zipEntry.name.endsWith('.mov') ? 'video/quicktime' :
+                                     zipEntry.name.endsWith('.avi') ? 'video/x-msvideo' :
+                                     zipEntry.name.endsWith('.mkv') ? 'video/x-matroska' :
+                                     `image/${name.split('.').pop()}`;
+                        await addMediaItem({ data: blob, type: type, filename: name, liked: false });
+                        added++;
+                    }
+                    alert(`Successfully imported ${added} media files from ZIP.`);
+                    zipInput.value = '';
+                    loadFeed();
+                } catch (err) {
+                    console.error(err);
+                    alert('Failed to read ZIP file. It might be corrupted.');
+                    zipInput.value = '';
+                }
             });
 
             async function addFilesToDB(files) {
                 for (const file of files) {
                     const buffer = await file.arrayBuffer();
                     const blob = new Blob([buffer], { type: file.type });
-                    await addMediaItem({
-                        data: blob,
-                        type: file.type,
-                        filename: file.name,
-                        liked: false
-                    });
+                    await addMediaItem({ data: blob, type: file.type, filename: file.name, liked: false });
                 }
             }
 
-            // Non-functional buttons
+            // Placeholder buttons
             document.getElementById('btn-comment').addEventListener('click', () => alert('Comments coming soon'));
             document.getElementById('btn-favorite').addEventListener('click', () => alert('Favorites coming soon'));
 
-            // ---------- APP INIT ----------
             async function showApp() {
                 loginScreen.style.display = 'none';
                 appDiv.style.display = 'block';
@@ -738,7 +707,6 @@
                 await loadFeed();
             }
 
-            // ---------- STARTUP ----------
             window.addEventListener('load', async () => {
                 if (sessionStorage.getItem('loggedIn') === 'true') {
                     await showApp();
@@ -748,7 +716,6 @@
                 loginScreen.style.display = 'flex';
                 appDiv.style.display = 'none';
             });
-
         })();
     </script>
 </body>
