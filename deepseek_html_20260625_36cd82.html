@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>MediaFeed</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body, html {
+            width: 100%; height: 100%;
+            overflow: hidden;
+            background: #000;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            touch-action: pan-y;
+        }
+
+        /* ---------- PASSWORD SCREENS ---------- */
+        #login-screen {
+            width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            background: #0a0a0a; color: #fff;
+            padding: 2rem; text-align: center;
+        }
+        #login-screen input {
+            width: 80%; max-width: 280px;
+            padding: 12px; margin: 8px 0;
+            border-radius: 12px; border: none;
+            background: #1c1c1e; color: #fff;
+            font-size: 16px; outline: none;
+        }
+        #login-screen button {
+            width: 80%; max-width: 280px;
+            padding: 14px; margin: 12px 0;
+            border-radius: 12px; border: none;
+            background: #ff2d55; color: white;
+            font-size: 17px; font-weight: 600;
+            cursor: pointer; transition: background 0.2s;
+        }
+        #login-screen button:active { background: #d42a4a; }
+        .error-msg { color: #ff3b30; margin-top: 8px; font-size: 14px; }
+        .lockout-timer { margin-top: 16px; font-size: 20px; font-weight: bold; color: #ff9500; }
+
+        /* ---------- MAIN APP ---------- */
+        #app {
+            display: none; width: 100%; height: 100%;
+            position: relative; background: #000;
+        }
+        #feed-container {
+            width: 100%; height: 100%;
+            overflow-y: scroll;
+            scroll-snap-type: y mandatory;
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+            position: relative; z-index: 1;
+        }
+        .feed-item {
+            width: 100%; height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            scroll-snap-align: start;
+            scroll-snap-stop: always;
+            position: relative; background: #000;
+        }
+        .feed-item img, .feed-item video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;       /* fits without cropping, touches edges based on aspect ratio */
+        }
+        .no-media-message {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff; text-align: center; font-size: 18px; z-index: 10;
+        }
+        .no-media-message button {
+            display: block; margin: 20px auto;
+            padding: 14px 30px; background: #ff2d55;
+            color: white; border: none; border-radius: 30px;
+            font-size: 16px; cursor: pointer;
+        }
+
+        /* ---------- UI OVERLAY (right side) ---------- */
+        #ui-overlay {
+            position: fixed; right: 12px; bottom: 80px;
+            display: flex; flex-direction: column; align-items: center;
+            gap: 24px; z-index: 10; pointer-events: none;
+        }
+        #ui-overlay button {
+            background: rgba(0,0,0,0.5); border: none;
+            color: white; font-size: 28px;
+            width: 48px; height: 48px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; pointer-events: auto;
+            backdrop-filter: blur(8px); transition: transform 0.1s;
+        }
+        #ui-overlay button:active { transform: scale(0.9); }
+        .like-btn.liked { color: #ff2d55; }
+        .mute-btn { font-size: 24px; }
+
+        /* ---------- FULLSCREEN ---------- */
+        #fullscreen-exit {
+            position: fixed; top: 16px; left: 16px;
+            background: rgba(0,0,0,0.5); border: none;
+            color: rgba(255,255,255,0.7); font-size: 28px;
+            width: 40px; height: 40px; border-radius: 50%;
+            display: none; align-items: center; justify-content: center;
+            z-index: 20; cursor: pointer;
+        }
+        body.fullscreen-mode #ui-overlay { display: none; }
+        body.fullscreen-mode #fullscreen-exit { display: flex; }
+
+        /* ---------- MODAL (more options) ---------- */
+        .modal-backdrop {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.8); z-index: 30;
+            display: none; align-items: flex-end; justify-content: center;
+        }
+        .modal-backdrop.active { display: flex; }
+        .modal-content {
+            width: 100%; background: #1c1c1e;
+            border-radius: 20px 20px 0 0; padding: 24px 20px 40px;
+            color: #fff; max-height: 80vh; overflow-y: auto;
+        }
+        .modal-content h3 { margin-bottom: 20px; font-size: 20px; }
+        .setting-row {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 16px; font-size: 16px;
+        }
+        .setting-row input[type="number"] {
+            width: 70px; padding: 8px; border-radius: 8px;
+            border: 1px solid #444; background: #2c2c2e;
+            color: #fff; font-size: 15px; text-align: center;
+        }
+        .modal-content button {
+            width: 100%; padding: 14px; margin-bottom: 12px;
+            border-radius: 12px; border: none;
+            font-size: 16px; font-weight: 600; cursor: pointer;
+        }
+        .btn-primary { background: #ff2d55; color: white; }
+        .btn-secondary { background: #2c2c2e; color: #fff; }
+    </style>
+</head>
+<body>
+
+    <!-- ========== LOGIN / SETUP ========== -->
+    <div id="login-screen">
+        <h2 id="login-title">🔐 MediaFeed</h2>
+        <div id="password-fields">
+            <input type="password" id="password-input" placeholder="Enter password" autocomplete="off">
+            <input type="password" id="password-confirm" placeholder="Confirm password" style="display:none;">
+            <button id="password-submit">Enter</button>
+        </div>
+        <div id="lockout-message" style="display:none;">
+            <p>Too many attempts.</p>
+            <p>Locked out for <span id="lockout-timer">5:00</span></p>
+        </div>
+        <div id="error-message" class="error-msg"></div>
+    </div>
+
+    <!-- ========== MAIN APP ========== -->
+    <div id="app">
+        <div id="feed-container"></div>
+
+        <!-- UI overlay (right buttons) -->
+        <div id="ui-overlay">
+            <button id="btn-like" class="like-btn" title="Like">♥</button>
+            <button id="btn-comment" title="Comment (coming soon)">💬</button>
+            <button id="btn-favorite" title="Favorite (coming soon)">🔖</button>
+            <button id="btn-mute" class="mute-btn" title="Mute/Unmute">🔊</button>
+            <button id="btn-more" title="More options">⋯</button>
+        </div>
+
+        <!-- Fullscreen exit button -->
+        <button id="fullscreen-exit">←</button>
+
+        <!-- Modal backdrop -->
+        <div class="modal-backdrop" id="modal-backdrop">
+            <div class="modal-content">
+                <h3>Options</h3>
+                <button class="btn-primary" id="btn-add-media">＋ Add Media</button>
+                <button class="btn-primary" id="btn-add-folder">📁 Add Folder</button>
+                <div class="setting-row">
+                    <span>Auto‑scroll</span>
+                    <input type="checkbox" id="autoscroll-toggle">
+                </div>
+                <div class="setting-row">
+                    <span>Interval (sec)</span>
+                    <input type="number" id="autoscroll-interval" value="5" min="1" step="1">
+                </div>
+                <div class="setting-row">
+                    <span>Video playbacks</span>
+                    <input type="number" id="video-playbacks" value="1" min="0" step="1">
+                </div>
+                <button class="btn-secondary" id="btn-fullscreen">⛶ Fullscreen</button>
+                <button class="btn-secondary" id="btn-mute2">🔇 Mute / Unmute</button>
+                <button class="btn-secondary" id="btn-close-modal">Close</button>
+            </div>
+        </div>
+
+        <!-- Hidden file inputs -->
+        <input type="file" id="file-input" accept="image/*,video/*" multiple style="display:none;">
+        <input type="file" id="folder-input" webkitdirectory multiple style="display:none;">
+    </div>
+
+    <script>
+        (function() {
+            // ---------- CONSTANTS ----------
+            const MAX_ATTEMPTS = 2;
+            const LOCKOUT_DURATION = 5 * 60 * 1000;
+            const DB_NAME = 'MediaFeedDB';
+            const DB_STORE = 'media';
+
+            // ---------- GLOBALS ----------
+            let db = null;
+            let feedOrder = [];
+            let currentActiveIndex = 0;
+            let autoScrollTimeout = null;
+            let videoEndedListener = null;
+            let videoPlaybackCounter = 0;
+            let currentVideoElement = null;
+            let audioMuted = true;
+            let autoScrollEnabled = false;
+            let autoScrollIntervalSec = 5;
+            let videoPlaybacksSetting = 1;
+
+            // ---------- DOM ELEMENTS ----------
+            const loginScreen = document.getElementById('login-screen');
+            const appDiv = document.getElementById('app');
+            const feedContainer = document.getElementById('feed-container');
+            const uiOverlay = document.getElementById('ui-overlay');
+            const fullscreenExitBtn = document.getElementById('fullscreen-exit');
+            const likeBtn = document.getElementById('btn-like');
+            const muteBtn = document.getElementById('btn-mute');
+            const modalBackdrop = document.getElementById('modal-backdrop');
+            const fileInput = document.getElementById('file-input');
+            const folderInput = document.getElementById('folder-input');
+
+            // Password elements
+            const passwordInput = document.getElementById('password-input');
+            const passwordConfirm = document.getElementById('password-confirm');
+            const passwordSubmit = document.getElementById('password-submit');
+            const loginTitle = document.getElementById('login-title');
+            const lockoutDiv = document.getElementById('lockout-message');
+            const lockoutTimerSpan = document.getElementById('lockout-timer');
+            const errorMsg = document.getElementById('error-message');
+            const passwordFieldsDiv = document.getElementById('password-fields');
+
+            // ---------- UTILS ----------
+            async function sha256(message) {
+                const msgBuffer = new TextEncoder().encode(message);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            }
+
+            function formatTime(ms) {
+                const totalSec = Math.ceil(ms / 1000);
+                const min = Math.floor(totalSec / 60);
+                const sec = totalSec % 60;
+                return `${min}:${sec.toString().padStart(2, '0')}`;
+            }
+
+            // ---------- INDEXEDDB ----------
+            function openDB() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(DB_NAME, 1);
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(DB_STORE)) {
+                            db.createObjectStore(DB_STORE, { keyPath: 'id', autoIncrement: true });
+                        }
+                    };
+                    request.onsuccess = (event) => {
+                        db = event.target.result;
+                        resolve(db);
+                    };
+                    request.onerror = (event) => {
+                        reject(event.target.error);
+                    };
+                });
+            }
+
+            function getAllMedia() {
+                return new Promise((resolve, reject) => {
+                    const transaction = db.transaction(DB_STORE, 'readonly');
+                    const store = transaction.objectStore(DB_STORE);
+                    const request = store.getAll();
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            function addMediaItem(item) {
+                return new Promise((resolve, reject) => {
+                    const transaction = db.transaction(DB_STORE, 'readwrite');
+                    const store = transaction.objectStore(DB_STORE);
+                    const request = store.add(item);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            function updateMediaItem(id, changes) {
+                return new Promise((resolve, reject) => {
+                    const transaction = db.transaction(DB_STORE, 'readwrite');
+                    const store = transaction.objectStore(DB_STORE);
+                    const getRequest = store.get(id);
+                    getRequest.onsuccess = () => {
+                        const data = getRequest.result;
+                        if (!data) return reject('not found');
+                        Object.assign(data, changes);
+                        const putRequest = store.put(data);
+                        putRequest.onsuccess = () => resolve();
+                        putRequest.onerror = () => reject(putRequest.error);
+                    };
+                    getRequest.onerror = () => reject(getRequest.error);
+                });
+            }
+
+            // ---------- PASSWORD & LOCKOUT ----------
+            function getLockData() {
+                const attempts = parseInt(localStorage.getItem('failedAttempts') || '0', 10);
+                const lockUntil = parseInt(localStorage.getItem('lockUntil') || '0', 10);
+                return { attempts, lockUntil };
+            }
+
+            function setLockData(attempts, lockUntil) {
+                localStorage.setItem('failedAttempts', attempts);
+                if (lockUntil) {
+                    localStorage.setItem('lockUntil', lockUntil.toString());
+                } else {
+                    localStorage.removeItem('lockUntil');
+                }
+            }
+
+            function checkLockout() {
+                const { attempts, lockUntil } = getLockData();
+                if (lockUntil && Date.now() < lockUntil) {
+                    return true;
+                }
+                if (lockUntil && Date.now() >= lockUntil) {
+                    setLockData(0, null);
+                }
+                return false;
+            }
+
+            function startLockoutTimer() {
+                const { lockUntil } = getLockData();
+                if (!lockUntil) return;
+                function tick() {
+                    const remaining = lockUntil - Date.now();
+                    if (remaining <= 0) {
+                        lockoutDiv.style.display = 'none';
+                        passwordFieldsDiv.style.display = 'block';
+                        setLockData(0, null);
+                        errorMsg.textContent = '';
+                        return;
+                    }
+                    lockoutTimerSpan.textContent = formatTime(remaining);
+                    requestAnimationFrame(tick);
+                }
+                lockoutDiv.style.display = 'block';
+                passwordFieldsDiv.style.display = 'none';
+                tick();
+            }
+
+            async function handlePassword() {
+                const storedHash = localStorage.getItem('passwordHash');
+                const inputVal = passwordInput.value;
+
+                if (!storedHash) {
+                    const confirmVal = passwordConfirm.value;
+                    if (!inputVal || inputVal.length < 4) {
+                        errorMsg.textContent = 'Password must be at least 4 characters.';
+                        return;
+                    }
+                    if (inputVal !== confirmVal) {
+                        errorMsg.textContent = 'Passwords do not match.';
+                        return;
+                    }
+                    const hash = await sha256(inputVal);
+                    localStorage.setItem('passwordHash', hash);
+                    sessionStorage.setItem('loggedIn', 'true');
+                    showApp();
+                    return;
+                }
+
+                const hash = await sha256(inputVal);
+                if (hash === storedHash) {
+                    setLockData(0, null);
+                    sessionStorage.setItem('loggedIn', 'true');
+                    showApp();
+                } else {
+                    let { attempts } = getLockData();
+                    attempts++;
+                    if (attempts >= MAX_ATTEMPTS) {
+                        setLockData(0, Date.now() + LOCKOUT_DURATION);
+                        checkLockout();
+                        startLockoutTimer();
+                        errorMsg.textContent = '';
+                    } else {
+                        setLockData(attempts, null);
+                        errorMsg.textContent = `Wrong password. ${MAX_ATTEMPTS - attempts} attempt(s) left.`;
+                    }
+                    passwordInput.value = '';
+                }
+            }
+
+            function setupPasswordUI() {
+                const storedHash = localStorage.getItem('passwordHash');
+                if (storedHash) {
+                    loginTitle.textContent = '🔐 Enter Password';
+                    passwordConfirm.style.display = 'none';
+                    passwordInput.placeholder = 'Password';
+                } else {
+                    loginTitle.textContent = '🔐 Set a Password';
+                    passwordConfirm.style.display = 'block';
+                    passwordInput.placeholder = 'New password';
+                    passwordConfirm.placeholder = 'Confirm password';
+                }
+                passwordFieldsDiv.style.display = 'block';
+                lockoutDiv.style.display = 'none';
+                errorMsg.textContent = '';
+
+                if (checkLockout()) {
+                    passwordFieldsDiv.style.display = 'none';
+                    startLockoutTimer();
+                }
+            }
+
+            passwordSubmit.addEventListener('click', handlePassword);
+            passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handlePassword(); });
+            passwordConfirm.addEventListener('keydown', (e) => { if (e.key === 'Enter') handlePassword(); });
+
+            // ---------- MEDIA FEED BUILDING ----------
+            async function loadFeed() {
+                const allMedia = await getAllMedia();
+                if (allMedia.length === 0) {
+                    feedContainer.innerHTML = `<div class="no-media-message">
+                        <p>No media yet</p>
+                        <button id="no-media-add-btn">＋ Add Media</button>
+                    </div>`;
+                    document.getElementById('no-media-add-btn')?.addEventListener('click', () => fileInput.click());
+                    feedOrder = [];
+                    return;
+                }
+
+                const shuffled = [...allMedia];
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                }
+                feedOrder = shuffled.map(item => item.id);
+                currentActiveIndex = 0;
+
+                feedContainer.innerHTML = '';
+                shuffled.forEach((item, index) => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'feed-item';
+                    itemDiv.dataset.id = item.id;
+                    itemDiv.dataset.index = index;
+
+                    const blobUrl = URL.createObjectURL(item.data);
+                    if (item.type.startsWith('video/')) {
+                        const video = document.createElement('video');
+                        video.src = blobUrl;
+                        video.muted = audioMuted;
+                        video.loop = false;
+                        video.playsInline = true;
+                        video.setAttribute('playsinline', '');
+                        video.preload = 'metadata';
+                        video.dataset.blobUrl = blobUrl;
+                        itemDiv.appendChild(video);
+                    } else {
+                        const img = document.createElement('img');
+                        img.src = blobUrl;
+                        img.alt = item.filename || '';
+                        img.dataset.blobUrl = blobUrl;
+                        itemDiv.appendChild(img);
+                    }
+                    feedContainer.appendChild(itemDiv);
+                });
+
+                setupIntersectionObserver();
+                updateActiveItemUI(0);
+                scheduleAutoScroll(0);
+            }
+
+            function setupIntersectionObserver() {
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting && entry.target === feedContainer.children[currentActiveIndex]) {
+                            return;
+                        }
+                        if (entry.isIntersecting) {
+                            const index = parseInt(entry.target.dataset.index, 10);
+                            if (!isNaN(index) && index !== currentActiveIndex) {
+                                changeActiveItem(index);
+                            }
+                        }
+                    });
+                }, { threshold: 0.6 });
+
+                Array.from(feedContainer.children).forEach(child => observer.observe(child));
+            }
+
+            function changeActiveItem(newIndex) {
+                pauseCurrentVideo();
+                currentActiveIndex = newIndex;
+                updateActiveItemUI(newIndex);
+                scheduleAutoScroll(newIndex);
+                playCurrentVideoIfNeeded();
+            }
+
+            function getMediaElement(index) {
+                const child = feedContainer.children[index];
+                if (!child) return null;
+                const video = child.querySelector('video');
+                const img = child.querySelector('img');
+                return { video, img, child };
+            }
+
+            function pauseCurrentVideo() {
+                if (currentVideoElement) {
+                    currentVideoElement.pause();
+                    if (videoEndedListener) {
+                        currentVideoElement.removeEventListener('ended', videoEndedListener);
+                        videoEndedListener = null;
+                    }
+                    currentVideoElement = null;
+                }
+            }
+
+            function playCurrentVideoIfNeeded() {
+                const { video } = getMediaElement(currentActiveIndex);
+                if (video) {
+                    currentVideoElement = video;
+                    video.currentTime = 0;
+                    video.play().catch(e => console.log('Play prevented:', e));
+                }
+            }
+
+            function updateActiveItemUI(index) {
+                const mediaId = feedOrder[index];
+                getAllMedia().then(all => {
+                    const item = all.find(m => m.id === mediaId);
+                    if (item) {
+                        likeBtn.classList.toggle('liked', item.liked);
+                    }
+                });
+            }
+
+            // ---------- AUTO SCROLL ----------
+            function clearAutoScrollTimers() {
+                if (autoScrollTimeout) {
+                    clearTimeout(autoScrollTimeout);
+                    autoScrollTimeout = null;
+                }
+                if (currentVideoElement && videoEndedListener) {
+                    currentVideoElement.removeEventListener('ended', videoEndedListener);
+                    videoEndedListener = null;
+                }
+            }
+
+            function scheduleAutoScroll(index) {
+                clearAutoScrollTimers();
+                if (!autoScrollEnabled || feedOrder.length === 0) return;
+
+                const mediaId = feedOrder[index];
+                getAllMedia().then(all => {
+                    const item = all.find(m => m.id === mediaId);
+                    if (!item) return;
+
+                    if (item.type.startsWith('video/') && videoPlaybacksSetting > 0) {
+                        const { video } = getMediaElement(index);
+                        if (video) {
+                            videoPlaybackCounter = 0;
+                            videoEndedListener = () => {
+                                videoPlaybackCounter++;
+                                if (videoPlaybackCounter >= videoPlaybacksSetting) {
+                                    scrollToNext();
+                                }
+                            };
+                            video.addEventListener('ended', videoEndedListener);
+                        }
+                    } else {
+                        autoScrollTimeout = setTimeout(() => {
+                            scrollToNext();
+                        }, autoScrollIntervalSec * 1000);
+                    }
+                });
+            }
+
+            function scrollToNext() {
+                if (feedOrder.length === 0) return;
+                const nextIndex = (currentActiveIndex + 1) % feedOrder.length;
+                const nextChild = feedContainer.children[nextIndex];
+                if (nextChild) {
+                    nextChild.scrollIntoView({ behavior: 'smooth' });
+                }
+            }
+
+            // ---------- LIKE ----------
+            likeBtn.addEventListener('click', async () => {
+                if (feedOrder.length === 0) return;
+                const mediaId = feedOrder[currentActiveIndex];
+                const all = await getAllMedia();
+                const item = all.find(m => m.id === mediaId);
+                if (!item) return;
+                const newLiked = !item.liked;
+                await updateMediaItem(mediaId, { liked: newLiked });
+                likeBtn.classList.toggle('liked', newLiked);
+            });
+
+            // ---------- MUTE ----------
+            function setGlobalMute(muted) {
+                audioMuted = muted;
+                localStorage.setItem('audioMuted', muted ? '1' : '0');
+                document.querySelectorAll('.feed-item video').forEach(v => { v.muted = muted; });
+                muteBtn.textContent = muted ? '🔇' : '🔊';
+                document.getElementById('btn-mute2').textContent = muted ? '🔇 Unmute' : '🔊 Mute';
+            }
+
+            muteBtn.addEventListener('click', () => setGlobalMute(!audioMuted));
+            document.getElementById('btn-mute2').addEventListener('click', () => setGlobalMute(!audioMuted));
+
+            const savedMute = localStorage.getItem('audioMuted');
+            if (savedMute !== null) {
+                audioMuted = savedMute === '1';
+            }
+            muteBtn.textContent = audioMuted ? '🔇' : '🔊';
+
+            // ---------- FULLSCREEN ----------
+            document.getElementById('btn-fullscreen').addEventListener('click', () => {
+                document.body.classList.add('fullscreen-mode');
+                modalBackdrop.classList.remove('active');
+            });
+            fullscreenExitBtn.addEventListener('click', () => {
+                document.body.classList.remove('fullscreen-mode');
+            });
+
+            // ---------- MORE OPTIONS MODAL ----------
+            const autoscrollToggle = document.getElementById('autoscroll-toggle');
+            const autoscrollIntervalInput = document.getElementById('autoscroll-interval');
+            const videoPlaybacksInput = document.getElementById('video-playbacks');
+
+            autoScrollEnabled = localStorage.getItem('autoScrollEnabled') === 'true';
+            autoScrollIntervalSec = parseInt(localStorage.getItem('autoScrollIntervalSec') || '5', 10);
+            videoPlaybacksSetting = parseInt(localStorage.getItem('videoPlaybacks') || '1', 10);
+
+            autoscrollToggle.checked = autoScrollEnabled;
+            autoscrollIntervalInput.value = autoScrollIntervalSec;
+            videoPlaybacksInput.value = videoPlaybacksSetting;
+
+            function saveAutoScrollSettings() {
+                autoScrollEnabled = autoscrollToggle.checked;
+                autoScrollIntervalSec = parseInt(autoscrollIntervalInput.value, 10) || 5;
+                videoPlaybacksSetting = parseInt(videoPlaybacksInput.value, 10) || 0;
+                localStorage.setItem('autoScrollEnabled', autoScrollEnabled);
+                localStorage.setItem('autoScrollIntervalSec', autoScrollIntervalSec);
+                localStorage.setItem('videoPlaybacks', videoPlaybacksSetting);
+                if (autoScrollEnabled) {
+                    scheduleAutoScroll(currentActiveIndex);
+                } else {
+                    clearAutoScrollTimers();
+                }
+            }
+
+            autoscrollToggle.addEventListener('change', saveAutoScrollSettings);
+            autoscrollIntervalInput.addEventListener('input', saveAutoScrollSettings);
+            videoPlaybacksInput.addEventListener('input', saveAutoScrollSettings);
+
+            document.getElementById('btn-more').addEventListener('click', () => {
+                modalBackdrop.classList.add('active');
+            });
+            document.getElementById('btn-close-modal').addEventListener('click', () => {
+                modalBackdrop.classList.remove('active');
+            });
+            modalBackdrop.addEventListener('click', (e) => {
+                if (e.target === modalBackdrop) modalBackdrop.classList.remove('active');
+            });
+
+            // ---------- ADD MEDIA (individual files) ----------
+            document.getElementById('btn-add-media').addEventListener('click', () => {
+                fileInput.click();
+                modalBackdrop.classList.remove('active');
+            });
+
+            fileInput.addEventListener('change', async (e) => {
+                const files = Array.from(e.target.files);
+                await addFilesToDB(files);
+                fileInput.value = '';
+                loadFeed();
+            });
+
+            // ---------- ADD FOLDER ----------
+            document.getElementById('btn-add-folder').addEventListener('click', () => {
+                folderInput.click();
+                modalBackdrop.classList.remove('active');
+            });
+
+            folderInput.addEventListener('change', async (e) => {
+                const files = Array.from(e.target.files).filter(file => 
+                    file.type.startsWith('image/') || file.type.startsWith('video/')
+                );
+                if (files.length === 0) {
+                    alert('No image or video files found in the selected folder.');
+                } else {
+                    await addFilesToDB(files);
+                }
+                folderInput.value = '';
+                loadFeed();
+            });
+
+            async function addFilesToDB(files) {
+                for (const file of files) {
+                    const buffer = await file.arrayBuffer();
+                    const blob = new Blob([buffer], { type: file.type });
+                    await addMediaItem({
+                        data: blob,
+                        type: file.type,
+                        filename: file.name,
+                        liked: false
+                    });
+                }
+            }
+
+            // Non-functional buttons
+            document.getElementById('btn-comment').addEventListener('click', () => alert('Comments coming soon'));
+            document.getElementById('btn-favorite').addEventListener('click', () => alert('Favorites coming soon'));
+
+            // ---------- APP INIT ----------
+            async function showApp() {
+                loginScreen.style.display = 'none';
+                appDiv.style.display = 'block';
+                await openDB();
+                setGlobalMute(audioMuted);
+                await loadFeed();
+            }
+
+            // ---------- STARTUP ----------
+            window.addEventListener('load', async () => {
+                if (sessionStorage.getItem('loggedIn') === 'true') {
+                    await showApp();
+                    return;
+                }
+                setupPasswordUI();
+                loginScreen.style.display = 'flex';
+                appDiv.style.display = 'none';
+            });
+
+        })();
+    </script>
+</body>
+</html>
