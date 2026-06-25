@@ -15,33 +15,7 @@
             touch-action: pan-y;
         }
 
-        #login-screen {
-            width: 100%; height: 100%;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            background: #0a0a0a; color: #fff;
-            padding: 2rem; text-align: center;
-        }
-        #login-screen input {
-            width: 80%; max-width: 280px;
-            padding: 12px; margin: 8px 0;
-            border-radius: 12px; border: none;
-            background: #1c1c1e; color: #fff;
-            font-size: 16px; outline: none;
-        }
-        #login-screen button {
-            width: 80%; max-width: 280px;
-            padding: 14px; margin: 12px 0;
-            border-radius: 12px; border: none;
-            background: #ff2d55; color: white;
-            font-size: 17px; font-weight: 600;
-            cursor: pointer; transition: background 0.2s;
-        }
-        #login-screen button:active { background: #d42a4a; }
-        .error-msg { color: #ff3b30; margin-top: 8px; font-size: 14px; }
-        .lockout-timer { margin-top: 16px; font-size: 20px; font-weight: bold; color: #ff9500; }
-
-        #app { display: none; width: 100%; height: 100%; position: relative; background: #000; }
+        #app { width: 100%; height: 100%; position: relative; background: #000; }
         #feed-container {
             width: 100%; height: 100%;
             overflow-y: scroll;
@@ -58,7 +32,8 @@
             position: relative; background: #000;
         }
         .feed-item img, .feed-item video {
-            width: 100%; height: 100%;
+            width: 100%;
+            height: 100%;
             object-fit: contain;
         }
         .no-media-message {
@@ -133,20 +108,6 @@
 </head>
 <body>
 
-    <div id="login-screen">
-        <h2 id="login-title">🔐 MediaFeed</h2>
-        <div id="password-fields">
-            <input type="password" id="password-input" placeholder="Enter password" autocomplete="off">
-            <input type="password" id="password-confirm" placeholder="Confirm password" style="display:none;">
-            <button id="password-submit">Enter</button>
-        </div>
-        <div id="lockout-message" style="display:none;">
-            <p>Too many attempts.</p>
-            <p>Locked out for <span id="lockout-timer">5:00</span></p>
-        </div>
-        <div id="error-message" class="error-msg"></div>
-    </div>
-
     <div id="app">
         <div id="feed-container"></div>
 
@@ -190,13 +151,10 @@
         <input type="file" id="zip-input" accept=".zip" style="display:none;">
     </div>
 
-    <!-- JSZip library for ZIP extraction -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
     <script>
         (function() {
-            const MAX_ATTEMPTS = 2;
-            const LOCKOUT_DURATION = 5 * 60 * 1000;
             const DB_NAME = 'MediaFeedDB';
             const DB_STORE = 'media';
 
@@ -212,41 +170,17 @@
             let autoScrollIntervalSec = 5;
             let videoPlaybacksSetting = 1;
 
-            const loginScreen = document.getElementById('login-screen');
             const appDiv = document.getElementById('app');
             const feedContainer = document.getElementById('feed-container');
-            const uiOverlay = document.getElementById('ui-overlay');
-            const fullscreenExitBtn = document.getElementById('fullscreen-exit');
             const likeBtn = document.getElementById('btn-like');
             const muteBtn = document.getElementById('btn-mute');
             const modalBackdrop = document.getElementById('modal-backdrop');
             const fileInput = document.getElementById('file-input');
             const folderInput = document.getElementById('folder-input');
             const zipInput = document.getElementById('zip-input');
+            const fullscreenExitBtn = document.getElementById('fullscreen-exit');
 
-            const passwordInput = document.getElementById('password-input');
-            const passwordConfirm = document.getElementById('password-confirm');
-            const passwordSubmit = document.getElementById('password-submit');
-            const loginTitle = document.getElementById('login-title');
-            const lockoutDiv = document.getElementById('lockout-message');
-            const lockoutTimerSpan = document.getElementById('lockout-timer');
-            const errorMsg = document.getElementById('error-message');
-            const passwordFieldsDiv = document.getElementById('password-fields');
-
-            async function sha256(message) {
-                const msgBuffer = new TextEncoder().encode(message);
-                const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-                const hashArray = Array.from(new Uint8Array(hashBuffer));
-                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            }
-
-            function formatTime(ms) {
-                const totalSec = Math.ceil(ms / 1000);
-                const min = Math.floor(totalSec / 60);
-                const sec = totalSec % 60;
-                return `${min}:${sec.toString().padStart(2, '0')}`;
-            }
-
+            // ---------- INDEXEDDB ----------
             function openDB() {
                 return new Promise((resolve, reject) => {
                     const request = indexedDB.open(DB_NAME, 1);
@@ -297,102 +231,6 @@
                     getRequest.onerror = () => reject(getRequest.error);
                 });
             }
-
-            // ---------- PASSWORD ----------
-            function getLockData() {
-                const attempts = parseInt(localStorage.getItem('failedAttempts') || '0', 10);
-                const lockUntil = parseInt(localStorage.getItem('lockUntil') || '0', 10);
-                return { attempts, lockUntil };
-            }
-            function setLockData(attempts, lockUntil) {
-                localStorage.setItem('failedAttempts', attempts);
-                if (lockUntil) localStorage.setItem('lockUntil', lockUntil.toString());
-                else localStorage.removeItem('lockUntil');
-            }
-            function checkLockout() {
-                const { lockUntil } = getLockData();
-                if (lockUntil && Date.now() < lockUntil) return true;
-                if (lockUntil && Date.now() >= lockUntil) setLockData(0, null);
-                return false;
-            }
-            function startLockoutTimer() {
-                const { lockUntil } = getLockData();
-                if (!lockUntil) return;
-                function tick() {
-                    const remaining = lockUntil - Date.now();
-                    if (remaining <= 0) {
-                        lockoutDiv.style.display = 'none';
-                        passwordFieldsDiv.style.display = 'block';
-                        setLockData(0, null);
-                        errorMsg.textContent = '';
-                        return;
-                    }
-                    lockoutTimerSpan.textContent = formatTime(remaining);
-                    requestAnimationFrame(tick);
-                }
-                lockoutDiv.style.display = 'block';
-                passwordFieldsDiv.style.display = 'none';
-                tick();
-            }
-
-            async function handlePassword() {
-                const storedHash = localStorage.getItem('passwordHash');
-                const inputVal = passwordInput.value.trim();
-                if (!storedHash) {
-                    const confirmVal = passwordConfirm.value.trim();
-                    if (!inputVal || inputVal.length < 4) { errorMsg.textContent = 'Password must be at least 4 characters.'; return; }
-                    if (inputVal !== confirmVal) { errorMsg.textContent = 'Passwords do not match.'; return; }
-                    const hash = await sha256(inputVal);
-                    localStorage.setItem('passwordHash', hash);
-                    sessionStorage.setItem('loggedIn', 'true');
-                    showApp();
-                    return;
-                }
-                const hash = await sha256(inputVal);
-                if (hash === storedHash) {
-                    setLockData(0, null);
-                    sessionStorage.setItem('loggedIn', 'true');
-                    showApp();
-                } else {
-                    let { attempts } = getLockData();
-                    attempts++;
-                    if (attempts >= MAX_ATTEMPTS) {
-                        setLockData(0, Date.now() + LOCKOUT_DURATION);
-                        checkLockout();
-                        startLockoutTimer();
-                        errorMsg.textContent = '';
-                    } else {
-                        setLockData(attempts, null);
-                        errorMsg.textContent = `Wrong password. ${MAX_ATTEMPTS - attempts} attempt(s) left.`;
-                    }
-                    passwordInput.value = '';
-                }
-            }
-
-            function setupPasswordUI() {
-                const storedHash = localStorage.getItem('passwordHash');
-                if (storedHash) {
-                    loginTitle.textContent = '🔐 Enter Password';
-                    passwordConfirm.style.display = 'none';
-                    passwordInput.placeholder = 'Password';
-                } else {
-                    loginTitle.textContent = '🔐 Set a Password';
-                    passwordConfirm.style.display = 'block';
-                    passwordInput.placeholder = 'New password';
-                    passwordConfirm.placeholder = 'Confirm password';
-                }
-                passwordFieldsDiv.style.display = 'block';
-                lockoutDiv.style.display = 'none';
-                errorMsg.textContent = '';
-                if (checkLockout()) {
-                    passwordFieldsDiv.style.display = 'none';
-                    startLockoutTimer();
-                }
-            }
-
-            passwordSubmit.addEventListener('click', handlePassword);
-            passwordInput.addEventListener('keydown', e => { if (e.key === 'Enter') handlePassword(); });
-            passwordConfirm.addEventListener('keydown', e => { if (e.key === 'Enter') handlePassword(); });
 
             // ---------- FEED ----------
             async function loadFeed() {
@@ -647,10 +485,9 @@
                 try {
                     const zip = await JSZip.loadAsync(file);
                     const mediaFiles = [];
-                    // Collect all image/video entries
                     zip.forEach((relativePath, zipEntry) => {
                         if (!zipEntry.dir) {
-                            const name = relativePath.split('/').pop(); // filename
+                            const name = relativePath.split('/').pop();
                             const ext = name.split('.').pop().toLowerCase();
                             const imageExts = ['jpg','jpeg','png','gif','webp','bmp','svg'];
                             const videoExts = ['mp4','webm','ogg','mov','avi','mkv'];
@@ -699,23 +536,13 @@
             document.getElementById('btn-comment').addEventListener('click', () => alert('Comments coming soon'));
             document.getElementById('btn-favorite').addEventListener('click', () => alert('Favorites coming soon'));
 
-            async function showApp() {
-                loginScreen.style.display = 'none';
-                appDiv.style.display = 'block';
+            async function initApp() {
                 await openDB();
                 setGlobalMute(audioMuted);
                 await loadFeed();
             }
 
-            window.addEventListener('load', async () => {
-                if (sessionStorage.getItem('loggedIn') === 'true') {
-                    await showApp();
-                    return;
-                }
-                setupPasswordUI();
-                loginScreen.style.display = 'flex';
-                appDiv.style.display = 'none';
-            });
+            window.addEventListener('load', initApp);
         })();
     </script>
 </body>
