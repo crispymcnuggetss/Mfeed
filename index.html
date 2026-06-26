@@ -6,101 +6,76 @@
     <title>MediaFeed</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: -apple-system, sans-serif; touch-action: pan-y; }
 
-        body, html {
-            width: 100%; height: 100%;
-            overflow: hidden;
-            background: #000;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            touch-action: pan-y;
+        /* ---------- PASSWORD SCREENS ---------- */
+        #login-screen {
+            width: 100%; height: 100%; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            background: #0a0a0a; color: #fff; padding: 2rem; text-align: center;
         }
+        #login-screen input {
+            width: 80%; max-width: 280px; padding: 12px; margin: 8px 0;
+            border-radius: 12px; border: none; background: #1c1c1e; color: #fff; font-size: 16px; outline: none;
+        }
+        #login-screen button {
+            width: 80%; max-width: 280px; padding: 14px; margin: 12px 0;
+            border-radius: 12px; border: none; background: #ff2d55; color: white;
+            font-size: 17px; font-weight: 600; cursor: pointer;
+        }
+        .error-msg { color: #ff3b30; margin-top: 8px; font-size: 14px; }
+        .lockout-timer { margin-top: 16px; font-size: 20px; font-weight: bold; color: #ff9500; }
 
-        #app { width: 100%; height: 100%; position: relative; background: #000; }
+        /* ---------- MAIN APP ---------- */
+        #app { display: none; width: 100%; height: 100%; position: relative; background: #000; }
         #feed-container {
-            width: 100%; height: 100%;
-            overflow-y: scroll;
-            scroll-snap-type: y mandatory;
-            -webkit-overflow-scrolling: touch;
-            scroll-behavior: smooth;
-            position: relative; z-index: 1;
+            width: 100%; height: 100%; overflow-y: scroll;
+            scroll-snap-type: y mandatory; -webkit-overflow-scrolling: touch; scroll-behavior: smooth;
         }
         .feed-item {
-            width: 100%; height: 100vh;
-            display: flex; align-items: center; justify-content: center;
-            scroll-snap-align: start;
-            scroll-snap-stop: always;
-            position: relative; background: #000;
+            width: 100%; height: 100vh; display: flex; align-items: center; justify-content: center;
+            scroll-snap-align: start; scroll-snap-stop: always; position: relative; background: #000;
         }
-        .feed-item img, .feed-item video {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-        }
-        .no-media-message {
-            position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            color: #fff; text-align: center; font-size: 18px; z-index: 10;
-        }
-        .no-media-message button {
-            display: block; margin: 20px auto;
-            padding: 14px 30px; background: #ff2d55;
-            color: white; border: none; border-radius: 30px;
-            font-size: 16px; cursor: pointer;
-        }
-
+        .feed-item img, .feed-item video { width: 100%; height: 100%; object-fit: contain; }
         #ui-overlay {
             position: fixed; right: 12px; bottom: 80px;
-            display: flex; flex-direction: column; align-items: center;
-            gap: 24px; z-index: 10; pointer-events: none;
+            display: flex; flex-direction: column; gap: 24px; z-index: 10; pointer-events: none;
         }
         #ui-overlay button {
-            background: rgba(0,0,0,0.5); border: none;
-            color: white; font-size: 28px;
+            background: rgba(0,0,0,0.5); border: none; color: white; font-size: 28px;
             width: 48px; height: 48px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer; pointer-events: auto;
-            backdrop-filter: blur(8px); transition: transform 0.1s;
+            display: flex; align-items: center; justify-content: center; cursor: pointer; pointer-events: auto;
+            backdrop-filter: blur(8px);
         }
-        #ui-overlay button:active { transform: scale(0.9); }
         .like-btn.liked { color: #ff2d55; }
         .mute-btn { font-size: 24px; }
-
         #fullscreen-exit {
-            position: fixed; top: 16px; left: 16px;
-            background: rgba(0,0,0,0.5); border: none;
-            color: rgba(255,255,255,0.7); font-size: 28px;
-            width: 40px; height: 40px; border-radius: 50%;
-            display: none; align-items: center; justify-content: center;
-            z-index: 20; cursor: pointer;
+            position: fixed; top: 16px; left: 16px; background: rgba(0,0,0,0.5); border: none;
+            color: rgba(255,255,255,0.7); font-size: 28px; width: 40px; height: 40px; border-radius: 50%;
+            display: none; align-items: center; justify-content: center; z-index: 20; cursor: pointer;
         }
         body.fullscreen-mode #ui-overlay { display: none; }
         body.fullscreen-mode #fullscreen-exit { display: flex; }
-
         .modal-backdrop {
             position: fixed; top:0; left:0; width:100%; height:100%;
-            background: rgba(0,0,0,0.8); z-index: 30;
-            display: none; align-items: flex-end; justify-content: center;
+            background: rgba(0,0,0,0.8); z-index: 30; display: none; align-items: flex-end; justify-content: center;
         }
         .modal-backdrop.active { display: flex; }
         .modal-content {
-            width: 100%; background: #1c1c1e;
-            border-radius: 20px 20px 0 0; padding: 24px 20px 40px;
-            color: #fff; max-height: 80vh; overflow-y: auto;
+            width: 100%; background: #1c1c1e; border-radius: 20px 20px 0 0;
+            padding: 24px 20px 40px; color: #fff; max-height: 80vh; overflow-y: auto;
         }
         .modal-content h3 { margin-bottom: 20px; font-size: 20px; }
         .setting-row {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 16px; font-size: 16px;
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; font-size: 16px;
         }
         .setting-row input[type="number"] {
-            width: 70px; padding: 8px; border-radius: 8px;
-            border: 1px solid #444; background: #2c2c2e;
-            color: #fff; font-size: 15px; text-align: center;
+            width: 70px; padding: 8px; border-radius: 8px; border: 1px solid #444;
+            background: #2c2c2e; color: #fff; text-align: center;
         }
         .modal-content button {
-            width: 100%; padding: 14px; margin-bottom: 12px;
-            border-radius: 12px; border: none;
-            font-size: 16px; font-weight: 600; cursor: pointer;
+            width: 100%; padding: 14px; margin-bottom: 12px; border-radius: 12px;
+            border: none; font-size: 16px; font-weight: 600; cursor: pointer;
         }
         .btn-primary { background: #ff2d55; color: white; }
         .btn-secondary { background: #2c2c2e; color: #fff; }
@@ -108,19 +83,34 @@
 </head>
 <body>
 
+    <!-- ========== PASSWORD SCREEN ========== -->
+    <div id="login-screen">
+        <h2 id="login-title">🔐 MediaFeed</h2>
+        <div id="password-fields">
+            <input type="password" id="password-input" placeholder="Enter password" autocomplete="off">
+            <input type="password" id="password-confirm" placeholder="Confirm password" style="display:none;">
+            <button id="password-submit">Enter</button>
+        </div>
+        <div id="lockout-message" style="display:none;">
+            <p>Too many attempts.</p>
+            <p>Locked out for <span id="lockout-timer">5:00</span></p>
+        </div>
+        <div id="error-message" class="error-msg"></div>
+    </div>
+
+    <!-- ========== MAIN APP ========== -->
     <div id="app">
         <div id="feed-container"></div>
-
         <div id="ui-overlay">
             <button id="btn-like" class="like-btn" title="Like">♥</button>
-            <button id="btn-comment" title="Comment (coming soon)">💬</button>
-            <button id="btn-favorite" title="Favorite (coming soon)">🔖</button>
+            <button id="btn-comment" title="Comment (soon)">💬</button>
+            <button id="btn-favorite" title="Favorite (soon)">🔖</button>
             <button id="btn-mute" class="mute-btn" title="Mute/Unmute">🔊</button>
             <button id="btn-more" title="More options">⋯</button>
         </div>
-
         <button id="fullscreen-exit">←</button>
 
+        <!-- Modal backdrop -->
         <div class="modal-backdrop" id="modal-backdrop">
             <div class="modal-content">
                 <h3>Options</h3>
@@ -151,399 +141,494 @@
         <input type="file" id="zip-input" accept=".zip" style="display:none;">
     </div>
 
+    <!-- JSZip -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
-    <script>
-        (function() {
-            const DB_NAME = 'MediaFeedDB';
-            const DB_STORE = 'media';
+    <!-- Firebase SDK (module) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL, listAll } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+        import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, query, where, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-            let db = null;
-            let feedOrder = [];
-            let currentActiveIndex = 0;
-            let autoScrollTimeout = null;
-            let videoEndedListener = null;
-            let videoPlaybackCounter = 0;
-            let currentVideoElement = null;
-            let audioMuted = true;
-            let autoScrollEnabled = false;
-            let autoScrollIntervalSec = 5;
-            let videoPlaybacksSetting = 1;
+        // ========== PASTE YOUR FIREBASE CONFIG HERE ==========
+        const firebaseConfig = {
+            apiKey: "AIzaSyAyjhP6TrowQ6bDJwnb0SMvJiA-soKoblQ",
+            authDomain: "mediafeed-9c206.firebaseapp.com",
+            databaseURL: "https://mediafeed-9c206-default-rtdb.firebaseio.com",
+            projectId: "mediafeed-9c206",
+            storageBucket: "mediafeed-9c206.firebasestorage.app",
+            messagingSenderId: "287735734912",
+            appId: "1:287735734912:web:2fe08389d5f562c4d2bc65"
+        };
 
-            const appDiv = document.getElementById('app');
-            const feedContainer = document.getElementById('feed-container');
-            const likeBtn = document.getElementById('btn-like');
-            const muteBtn = document.getElementById('btn-mute');
-            const modalBackdrop = document.getElementById('modal-backdrop');
-            const fileInput = document.getElementById('file-input');
-            const folderInput = document.getElementById('folder-input');
-            const zipInput = document.getElementById('zip-input');
-            const fullscreenExitBtn = document.getElementById('fullscreen-exit');
+        const app = initializeApp(firebaseConfig);
+        const storage = getStorage(app);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
 
-            // ---------- INDEXEDDB ----------
-            function openDB() {
-                return new Promise((resolve, reject) => {
-                    const request = indexedDB.open(DB_NAME, 1);
-                    request.onupgradeneeded = (event) => {
-                        const db = event.target.result;
-                        if (!db.objectStoreNames.contains(DB_STORE)) {
-                            db.createObjectStore(DB_STORE, { keyPath: 'id', autoIncrement: true });
-                        }
-                    };
-                    request.onsuccess = (event) => { db = event.target.result; resolve(db); };
-                    request.onerror = (event) => reject(event.target.error);
-                });
-            }
+        // ---------- PASSWORD (CLIENT-SIDE ONLY) ----------
+        const MAX_ATTEMPTS = 2;
+        const LOCKOUT_DURATION = 5 * 60 * 1000; // 5 min
 
-            function getAllMedia() {
-                return new Promise((resolve, reject) => {
-                    const transaction = db.transaction(DB_STORE, 'readonly');
-                    const store = transaction.objectStore(DB_STORE);
-                    const request = store.getAll();
-                    request.onsuccess = () => resolve(request.result);
-                    request.onerror = () => reject(request.error);
-                });
-            }
+        function getLockData() {
+            return {
+                attempts: parseInt(localStorage.getItem('failedAttempts') || '0'),
+                lockUntil: parseInt(localStorage.getItem('lockUntil') || '0')
+            };
+        }
+        function setLockData(attempts, lockUntil) {
+            localStorage.setItem('failedAttempts', attempts);
+            if (lockUntil) localStorage.setItem('lockUntil', lockUntil.toString());
+            else localStorage.removeItem('lockUntil');
+        }
+        function isLockedOut() {
+            const { lockUntil } = getLockData();
+            if (lockUntil && Date.now() < lockUntil) return true;
+            if (lockUntil && Date.now() >= lockUntil) setLockData(0, null);
+            return false;
+        }
 
-            function addMediaItem(item) {
-                return new Promise((resolve, reject) => {
-                    const transaction = db.transaction(DB_STORE, 'readwrite');
-                    const store = transaction.objectStore(DB_STORE);
-                    const request = store.add(item);
-                    request.onsuccess = () => resolve(request.result);
-                    request.onerror = () => reject(request.error);
-                });
-            }
+        async function sha256(message) {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
 
-            function updateMediaItem(id, changes) {
-                return new Promise((resolve, reject) => {
-                    const transaction = db.transaction(DB_STORE, 'readwrite');
-                    const store = transaction.objectStore(DB_STORE);
-                    const getRequest = store.get(id);
-                    getRequest.onsuccess = () => {
-                        const data = getRequest.result;
-                        if (!data) return reject('not found');
-                        Object.assign(data, changes);
-                        const putRequest = store.put(data);
-                        putRequest.onsuccess = () => resolve();
-                        putRequest.onerror = () => reject(putRequest.error);
-                    };
-                    getRequest.onerror = () => reject(getRequest.error);
-                });
-            }
+        const loginScreen = document.getElementById('login-screen');
+        const passwordInput = document.getElementById('password-input');
+        const passwordConfirm = document.getElementById('password-confirm');
+        const passwordSubmit = document.getElementById('password-submit');
+        const loginTitle = document.getElementById('login-title');
+        const lockoutDiv = document.getElementById('lockout-message');
+        const lockoutTimerSpan = document.getElementById('lockout-timer');
+        const errorMsg = document.getElementById('error-message');
+        const passwordFieldsDiv = document.getElementById('password-fields');
 
-            // ---------- FEED ----------
-            async function loadFeed() {
-                const allMedia = await getAllMedia();
-                if (allMedia.length === 0) {
-                    feedContainer.innerHTML = `<div class="no-media-message">
-                        <p>No media yet</p>
-                        <button id="no-media-add-btn">＋ Add Media</button>
-                    </div>`;
-                    document.getElementById('no-media-add-btn')?.addEventListener('click', () => fileInput.click());
-                    feedOrder = [];
+        function formatTime(ms) {
+            const sec = Math.ceil(ms / 1000);
+            return `${Math.floor(sec/60)}:${(sec%60).toString().padStart(2,'0')}`;
+        }
+
+        function startLockoutTimer() {
+            const { lockUntil } = getLockData();
+            if (!lockUntil) return;
+            function tick() {
+                const remaining = lockUntil - Date.now();
+                if (remaining <= 0) {
+                    lockoutDiv.style.display = 'none';
+                    passwordFieldsDiv.style.display = 'block';
+                    setLockData(0, null);
+                    errorMsg.textContent = '';
                     return;
                 }
-                const shuffled = [...allMedia];
-                for (let i = shuffled.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                lockoutTimerSpan.textContent = formatTime(remaining);
+                requestAnimationFrame(tick);
+            }
+            lockoutDiv.style.display = 'block';
+            passwordFieldsDiv.style.display = 'none';
+            tick();
+        }
+
+        async function handlePassword() {
+            const storedHash = localStorage.getItem('passwordHash');
+            const inputVal = passwordInput.value.trim();
+
+            if (!storedHash) {
+                // First-time setup
+                const confirmVal = passwordConfirm.value.trim();
+                if (!inputVal || inputVal.length < 4) {
+                    errorMsg.textContent = 'Password must be at least 4 characters.';
+                    return;
                 }
-                feedOrder = shuffled.map(item => item.id);
-                currentActiveIndex = 0;
-                feedContainer.innerHTML = '';
-                shuffled.forEach((item, index) => {
-                    const itemDiv = document.createElement('div');
-                    itemDiv.className = 'feed-item';
-                    itemDiv.dataset.id = item.id;
-                    itemDiv.dataset.index = index;
-                    const blobUrl = URL.createObjectURL(item.data);
-                    if (item.type.startsWith('video/')) {
-                        const video = document.createElement('video');
-                        video.src = blobUrl;
-                        video.muted = audioMuted;
-                        video.loop = false;
-                        video.playsInline = true;
-                        video.setAttribute('playsinline', '');
-                        video.preload = 'metadata';
-                        video.dataset.blobUrl = blobUrl;
-                        itemDiv.appendChild(video);
-                    } else {
-                        const img = document.createElement('img');
-                        img.src = blobUrl;
-                        img.alt = item.filename || '';
-                        img.dataset.blobUrl = blobUrl;
-                        itemDiv.appendChild(img);
-                    }
-                    feedContainer.appendChild(itemDiv);
+                if (inputVal !== confirmVal) {
+                    errorMsg.textContent = 'Passwords do not match.';
+                    return;
+                }
+                const hash = await sha256(inputVal);
+                localStorage.setItem('passwordHash', hash);
+                sessionStorage.setItem('loggedIn', 'true');
+                showApp();
+                return;
+            }
+
+            const hash = await sha256(inputVal);
+            if (hash === storedHash) {
+                setLockData(0, null);
+                sessionStorage.setItem('loggedIn', 'true');
+                showApp();
+            } else {
+                let { attempts } = getLockData();
+                attempts++;
+                if (attempts >= MAX_ATTEMPTS) {
+                    setLockData(0, Date.now() + LOCKOUT_DURATION);
+                    startLockoutTimer();
+                    errorMsg.textContent = '';
+                } else {
+                    setLockData(attempts, null);
+                    errorMsg.textContent = `Wrong password. ${MAX_ATTEMPTS - attempts} attempt(s) left.`;
+                }
+                passwordInput.value = '';
+            }
+        }
+
+        function setupPasswordUI() {
+            const storedHash = localStorage.getItem('passwordHash');
+            if (storedHash) {
+                loginTitle.textContent = '🔐 Enter Password';
+                passwordConfirm.style.display = 'none';
+                passwordInput.placeholder = 'Password';
+            } else {
+                loginTitle.textContent = '🔐 Set a Password';
+                passwordConfirm.style.display = 'block';
+                passwordInput.placeholder = 'New password';
+                passwordConfirm.placeholder = 'Confirm password';
+            }
+            passwordFieldsDiv.style.display = 'block';
+            lockoutDiv.style.display = 'none';
+            errorMsg.textContent = '';
+            if (isLockedOut()) {
+                passwordFieldsDiv.style.display = 'none';
+                startLockoutTimer();
+            }
+        }
+
+        passwordSubmit.addEventListener('click', handlePassword);
+        passwordInput.addEventListener('keydown', e => { if (e.key === 'Enter') handlePassword(); });
+        passwordConfirm.addEventListener('keydown', e => { if (e.key === 'Enter') handlePassword(); });
+
+        // ---------- APP GLOBALS ----------
+        let feedItems = [];           // { id: docId, url, filename, type, liked }
+        let currentIndex = 0;
+        let audioMuted = true;
+        let autoScrollEnabled = false;
+        let autoScrollInterval = 5;
+        let videoPlaybacks = 1;
+        let autoScrollTimeout = null;
+        let videoEndedListener = null;
+        let currentVideo = null;
+
+        // DOM elements
+        const appDiv = document.getElementById('app');
+        const feedContainer = document.getElementById('feed-container');
+        const likeBtn = document.getElementById('btn-like');
+        const muteBtn = document.getElementById('btn-mute');
+        const modalBackdrop = document.getElementById('modal-backdrop');
+        const fileInput = document.getElementById('file-input');
+        const folderInput = document.getElementById('folder-input');
+        const zipInput = document.getElementById('zip-input');
+        const fullscreenExit = document.getElementById('fullscreen-exit');
+        const autoscrollToggle = document.getElementById('autoscroll-toggle');
+        const autoscrollIntervalInput = document.getElementById('autoscroll-interval');
+        const videoPlaybacksInput = document.getElementById('video-playbacks');
+
+        // ---------- FIREBASE AUTH ----------
+        async function ensureAuth() {
+            return new Promise(resolve => {
+                onAuthStateChanged(auth, async user => {
+                    if (!user) await signInAnonymously(auth);
+                    resolve();
                 });
-                setupIntersectionObserver();
-                updateActiveItemUI(0);
-                scheduleAutoScroll(0);
-            }
+            });
+        }
 
-            function setupIntersectionObserver() {
-                const observer = new IntersectionObserver((entries) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting && entry.target === feedContainer.children[currentActiveIndex]) return;
-                        if (entry.isIntersecting) {
-                            const index = parseInt(entry.target.dataset.index, 10);
-                            if (!isNaN(index) && index !== currentActiveIndex) changeActiveItem(index);
-                        }
-                    });
-                }, { threshold: 0.6 });
-                Array.from(feedContainer.children).forEach(child => observer.observe(child));
+        // ---------- LOAD FEED FROM FIRESTORE ----------
+        async function loadFeed() {
+            const snapshot = await getDocs(collection(db, "media"));
+            feedItems = [];
+            snapshot.forEach(doc => {
+                feedItems.push({ id: doc.id, ...doc.data() });
+            });
+            if (feedItems.length === 0) {
+                feedContainer.innerHTML = `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;text-align:center">
+                    <p>No media yet</p>
+                    <button id="no-media-add-btn" style="margin-top:20px;padding:14px 30px;background:#ff2d55;border:none;border-radius:30px;color:white;font-size:16px;cursor:pointer">＋ Add Media</button>
+                </div>`;
+                document.getElementById('no-media-add-btn')?.addEventListener('click', () => fileInput.click());
+                return;
             }
-
-            function changeActiveItem(newIndex) {
-                pauseCurrentVideo();
-                currentActiveIndex = newIndex;
-                updateActiveItemUI(newIndex);
-                scheduleAutoScroll(newIndex);
-                playCurrentVideoIfNeeded();
+            // Shuffle
+            for (let i = feedItems.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [feedItems[i], feedItems[j]] = [feedItems[j], feedItems[i]];
             }
+            currentIndex = 0;
+            renderFeed();
+        }
 
-            function getMediaElement(index) {
-                const child = feedContainer.children[index];
-                if (!child) return null;
-                return { video: child.querySelector('video'), img: child.querySelector('img'), child };
-            }
-
-            function pauseCurrentVideo() {
-                if (currentVideoElement) {
-                    currentVideoElement.pause();
-                    if (videoEndedListener) {
-                        currentVideoElement.removeEventListener('ended', videoEndedListener);
-                        videoEndedListener = null;
-                    }
-                    currentVideoElement = null;
+        function renderFeed() {
+            feedContainer.innerHTML = '';
+            feedItems.forEach((item, idx) => {
+                const div = document.createElement('div');
+                div.className = 'feed-item';
+                div.dataset.index = idx;
+                if (item.type.startsWith('video/')) {
+                    const vid = document.createElement('video');
+                    vid.src = item.url;
+                    vid.muted = audioMuted;
+                    vid.loop = false;
+                    vid.playsInline = true;
+                    vid.setAttribute('playsinline', '');
+                    vid.preload = 'metadata';
+                    div.appendChild(vid);
+                } else {
+                    const img = document.createElement('img');
+                    img.src = item.url;
+                    img.alt = item.filename || '';
+                    div.appendChild(img);
                 }
-            }
+                feedContainer.appendChild(div);
+            });
+            setupObserver();
+            updateUI();
+            scheduleAutoScroll();
+        }
 
-            function playCurrentVideoIfNeeded() {
-                const { video } = getMediaElement(currentActiveIndex);
-                if (video) {
-                    currentVideoElement = video;
-                    video.currentTime = 0;
-                    video.play().catch(e => console.log('Play prevented:', e));
-                }
-            }
-
-            function updateActiveItemUI(index) {
-                if (feedOrder.length === 0) return;
-                const mediaId = feedOrder[index];
-                getAllMedia().then(all => {
-                    const item = all.find(m => m.id === mediaId);
-                    if (item) likeBtn.classList.toggle('liked', item.liked);
-                });
-            }
-
-            // ---------- AUTO SCROLL ----------
-            function clearAutoScrollTimers() {
-                if (autoScrollTimeout) { clearTimeout(autoScrollTimeout); autoScrollTimeout = null; }
-                if (currentVideoElement && videoEndedListener) {
-                    currentVideoElement.removeEventListener('ended', videoEndedListener);
-                    videoEndedListener = null;
-                }
-            }
-
-            function scheduleAutoScroll(index) {
-                clearAutoScrollTimers();
-                if (!autoScrollEnabled || feedOrder.length === 0) return;
-                const mediaId = feedOrder[index];
-                getAllMedia().then(all => {
-                    const item = all.find(m => m.id === mediaId);
-                    if (!item) return;
-                    if (item.type.startsWith('video/') && videoPlaybacksSetting > 0) {
-                        const { video } = getMediaElement(index);
-                        if (video) {
-                            videoPlaybackCounter = 0;
-                            videoEndedListener = () => {
-                                videoPlaybackCounter++;
-                                if (videoPlaybackCounter >= videoPlaybacksSetting) scrollToNext();
-                            };
-                            video.addEventListener('ended', videoEndedListener);
-                        }
-                    } else {
-                        autoScrollTimeout = setTimeout(() => scrollToNext(), autoScrollIntervalSec * 1000);
+        function setupObserver() {
+            const obs = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const idx = parseInt(entry.target.dataset.index, 10);
+                        if (!isNaN(idx) && idx !== currentIndex) changeItem(idx);
                     }
                 });
+            }, { threshold: 0.6 });
+            Array.from(feedContainer.children).forEach(c => obs.observe(c));
+        }
+
+        function changeItem(newIndex) {
+            if (currentVideo) {
+                currentVideo.pause();
+                if (videoEndedListener) currentVideo.removeEventListener('ended', videoEndedListener);
+                currentVideo = null;
             }
-
-            function scrollToNext() {
-                if (feedOrder.length === 0) return;
-                const nextIndex = (currentActiveIndex + 1) % feedOrder.length;
-                const nextChild = feedContainer.children[nextIndex];
-                if (nextChild) nextChild.scrollIntoView({ behavior: 'smooth' });
+            currentIndex = newIndex;
+            updateUI();
+            scheduleAutoScroll();
+            const vid = feedContainer.children[currentIndex]?.querySelector('video');
+            if (vid) {
+                currentVideo = vid;
+                vid.currentTime = 0;
+                vid.play().catch(() => {});
             }
+        }
 
-            // ---------- LIKE ----------
-            likeBtn.addEventListener('click', async () => {
-                if (feedOrder.length === 0) return;
-                const mediaId = feedOrder[currentActiveIndex];
-                const all = await getAllMedia();
-                const item = all.find(m => m.id === mediaId);
-                if (!item) return;
-                const newLiked = !item.liked;
-                await updateMediaItem(mediaId, { liked: newLiked });
-                likeBtn.classList.toggle('liked', newLiked);
-            });
+        function updateUI() {
+            if (feedItems.length === 0) return;
+            likeBtn.classList.toggle('liked', feedItems[currentIndex].liked);
+        }
 
-            // ---------- MUTE ----------
-            function setGlobalMute(muted) {
-                audioMuted = muted;
-                localStorage.setItem('audioMuted', muted ? '1' : '0');
-                document.querySelectorAll('.feed-item video').forEach(v => { v.muted = muted; });
-                muteBtn.textContent = muted ? '🔇' : '🔊';
-                document.getElementById('btn-mute2').textContent = muted ? '🔇 Unmute' : '🔊 Mute';
-            }
-            muteBtn.addEventListener('click', () => setGlobalMute(!audioMuted));
-            document.getElementById('btn-mute2').addEventListener('click', () => setGlobalMute(!audioMuted));
-            const savedMute = localStorage.getItem('audioMuted');
-            if (savedMute !== null) audioMuted = savedMute === '1';
-            muteBtn.textContent = audioMuted ? '🔇' : '🔊';
-
-            // ---------- FULLSCREEN ----------
-            document.getElementById('btn-fullscreen').addEventListener('click', () => {
-                document.body.classList.add('fullscreen-mode');
-                modalBackdrop.classList.remove('active');
-            });
-            fullscreenExitBtn.addEventListener('click', () => document.body.classList.remove('fullscreen-mode'));
-
-            // ---------- MORE OPTIONS MODAL ----------
-            const autoscrollToggle = document.getElementById('autoscroll-toggle');
-            const autoscrollIntervalInput = document.getElementById('autoscroll-interval');
-            const videoPlaybacksInput = document.getElementById('video-playbacks');
-            autoScrollEnabled = localStorage.getItem('autoScrollEnabled') === 'true';
-            autoScrollIntervalSec = parseInt(localStorage.getItem('autoScrollIntervalSec') || '5', 10);
-            videoPlaybacksSetting = parseInt(localStorage.getItem('videoPlaybacks') || '1', 10);
-            autoscrollToggle.checked = autoScrollEnabled;
-            autoscrollIntervalInput.value = autoScrollIntervalSec;
-            videoPlaybacksInput.value = videoPlaybacksSetting;
-
-            function saveAutoScrollSettings() {
-                autoScrollEnabled = autoscrollToggle.checked;
-                autoScrollIntervalSec = parseInt(autoscrollIntervalInput.value, 10) || 5;
-                videoPlaybacksSetting = parseInt(videoPlaybacksInput.value, 10) || 0;
-                localStorage.setItem('autoScrollEnabled', autoScrollEnabled);
-                localStorage.setItem('autoScrollIntervalSec', autoScrollIntervalSec);
-                localStorage.setItem('videoPlaybacks', videoPlaybacksSetting);
-                if (autoScrollEnabled) scheduleAutoScroll(currentActiveIndex);
-                else clearAutoScrollTimers();
-            }
-            autoscrollToggle.addEventListener('change', saveAutoScrollSettings);
-            autoscrollIntervalInput.addEventListener('input', saveAutoScrollSettings);
-            videoPlaybacksInput.addEventListener('input', saveAutoScrollSettings);
-
-            document.getElementById('btn-more').addEventListener('click', () => modalBackdrop.classList.add('active'));
-            document.getElementById('btn-close-modal').addEventListener('click', () => modalBackdrop.classList.remove('active'));
-            modalBackdrop.addEventListener('click', e => { if (e.target === modalBackdrop) modalBackdrop.classList.remove('active'); });
-
-            // ---------- ADD MEDIA (files) ----------
-            document.getElementById('btn-add-media').addEventListener('click', () => { fileInput.click(); modalBackdrop.classList.remove('active'); });
-            fileInput.addEventListener('change', async (e) => {
-                await addFilesToDB(Array.from(e.target.files));
-                fileInput.value = '';
-                loadFeed();
-            });
-
-            // ---------- ADD FOLDER ----------
-            document.getElementById('btn-add-folder').addEventListener('click', () => { folderInput.click(); modalBackdrop.classList.remove('active'); });
-            folderInput.addEventListener('change', async (e) => {
-                const files = Array.from(e.target.files).filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
-                if (files.length === 0) alert('No image or video files found.');
-                else await addFilesToDB(files);
-                folderInput.value = '';
-                loadFeed();
-            });
-
-            // ---------- ADD FROM URL ----------
-            document.getElementById('btn-add-url').addEventListener('click', () => {
-                modalBackdrop.classList.remove('active');
-                const url = prompt('Paste the direct URL of an image/video:');
-                if (!url) return;
-                try { new URL(url); } catch { alert('Invalid URL'); return; }
-                fetch(url)
-                    .then(res => res.blob())
-                    .then(async blob => {
-                        const filename = url.split('/').pop().split('?')[0] || 'unknown';
-                        await addMediaItem({ data: blob, type: blob.type || 'image/png', filename, liked: false });
-                        loadFeed();
-                    })
-                    .catch(() => alert('Failed to load media. Check the URL.'));
-            });
-
-            // ---------- IMPORT ZIP ----------
-            document.getElementById('btn-import-zip').addEventListener('click', () => {
-                modalBackdrop.classList.remove('active');
-                zipInput.click();
-            });
-
-            zipInput.addEventListener('change', async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                try {
-                    const zip = await JSZip.loadAsync(file);
-                    const mediaFiles = [];
-                    zip.forEach((relativePath, zipEntry) => {
-                        if (!zipEntry.dir) {
-                            const name = relativePath.split('/').pop();
-                            const ext = name.split('.').pop().toLowerCase();
-                            const imageExts = ['jpg','jpeg','png','gif','webp','bmp','svg'];
-                            const videoExts = ['mp4','webm','ogg','mov','avi','mkv'];
-                            if (imageExts.includes(ext) || videoExts.includes(ext)) {
-                                mediaFiles.push({ zipEntry, name });
-                            }
-                        }
-                    });
-                    if (mediaFiles.length === 0) {
-                        alert('No image or video files found in the ZIP.');
-                        zipInput.value = '';
-                        return;
-                    }
-                    let added = 0;
-                    for (const { zipEntry, name } of mediaFiles) {
-                        const blob = await zipEntry.async('blob');
-                        const type = zipEntry.name.endsWith('.mp4') ? 'video/mp4' :
-                                     zipEntry.name.endsWith('.webm') ? 'video/webm' :
-                                     zipEntry.name.endsWith('.ogg') ? 'video/ogg' :
-                                     zipEntry.name.endsWith('.mov') ? 'video/quicktime' :
-                                     zipEntry.name.endsWith('.avi') ? 'video/x-msvideo' :
-                                     zipEntry.name.endsWith('.mkv') ? 'video/x-matroska' :
-                                     `image/${name.split('.').pop()}`;
-                        await addMediaItem({ data: blob, type: type, filename: name, liked: false });
-                        added++;
-                    }
-                    alert(`Successfully imported ${added} media files from ZIP.`);
-                    zipInput.value = '';
-                    loadFeed();
-                } catch (err) {
-                    console.error(err);
-                    alert('Failed to read ZIP file. It might be corrupted.');
-                    zipInput.value = '';
+        // ---------- AUTO SCROLL ----------
+        function scheduleAutoScroll() {
+            clearAutoScrollTimers();
+            if (!autoScrollEnabled || feedItems.length === 0) return;
+            const item = feedItems[currentIndex];
+            if (item.type.startsWith('video/') && videoPlaybacks > 0) {
+                const vid = feedContainer.children[currentIndex]?.querySelector('video');
+                if (vid) {
+                    let counter = 0;
+                    videoEndedListener = () => {
+                        counter++;
+                        if (counter >= videoPlaybacks) scrollNext();
+                    };
+                    vid.addEventListener('ended', videoEndedListener);
                 }
-            });
+            } else {
+                autoScrollTimeout = setTimeout(scrollNext, autoScrollInterval * 1000);
+            }
+        }
 
-            async function addFilesToDB(files) {
+        function clearAutoScrollTimers() {
+            if (autoScrollTimeout) { clearTimeout(autoScrollTimeout); autoScrollTimeout = null; }
+            if (currentVideo && videoEndedListener) {
+                currentVideo.removeEventListener('ended', videoEndedListener);
+                videoEndedListener = null;
+            }
+        }
+
+        function scrollNext() {
+            if (feedItems.length === 0) return;
+            const nextIndex = (currentIndex + 1) % feedItems.length;
+            feedContainer.children[nextIndex]?.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // ---------- LIKE ----------
+        likeBtn.addEventListener('click', async () => {
+            if (feedItems.length === 0) return;
+            const item = feedItems[currentIndex];
+            item.liked = !item.liked;
+            likeBtn.classList.toggle('liked', item.liked);
+            await updateDoc(doc(db, "media", item.id), { liked: item.liked });
+        });
+
+        // ---------- MUTE ----------
+        function setMute(muted) {
+            audioMuted = muted;
+            localStorage.setItem('audioMuted', muted ? '1' : '0');
+            document.querySelectorAll('.feed-item video').forEach(v => v.muted = muted);
+            muteBtn.textContent = muted ? '🔇' : '🔊';
+            document.getElementById('btn-mute2').textContent = muted ? '🔇 Unmute' : '🔊 Mute';
+        }
+        muteBtn.addEventListener('click', () => setMute(!audioMuted));
+        document.getElementById('btn-mute2').addEventListener('click', () => setMute(!audioMuted));
+
+        // ---------- FULLSCREEN ----------
+        document.getElementById('btn-fullscreen').addEventListener('click', () => {
+            document.body.classList.add('fullscreen-mode');
+            modalBackdrop.classList.remove('active');
+        });
+        fullscreenExit.addEventListener('click', () => document.body.classList.remove('fullscreen-mode'));
+
+        // ---------- SETTINGS ----------
+        autoScrollEnabled = localStorage.getItem('autoScrollEnabled') === 'true';
+        autoScrollInterval = parseInt(localStorage.getItem('autoScrollInterval') || '5');
+        videoPlaybacks = parseInt(localStorage.getItem('videoPlaybacks') || '1');
+        autoscrollToggle.checked = autoScrollEnabled;
+        autoscrollIntervalInput.value = autoScrollInterval;
+        videoPlaybacksInput.value = videoPlaybacks;
+
+        function saveAutoSettings() {
+            autoScrollEnabled = autoscrollToggle.checked;
+            autoScrollInterval = parseInt(autoscrollIntervalInput.value, 10) || 5;
+            videoPlaybacks = parseInt(videoPlaybacksInput.value, 10) || 0;
+            localStorage.setItem('autoScrollEnabled', autoScrollEnabled);
+            localStorage.setItem('autoScrollInterval', autoScrollInterval);
+            localStorage.setItem('videoPlaybacks', videoPlaybacks);
+            if (autoScrollEnabled) scheduleAutoScroll();
+            else clearAutoScrollTimers();
+        }
+        autoscrollToggle.addEventListener('change', saveAutoSettings);
+        autoscrollIntervalInput.addEventListener('input', saveAutoSettings);
+        videoPlaybacksInput.addEventListener('input', saveAutoSettings);
+
+        // ---------- MODAL ----------
+        document.getElementById('btn-more').addEventListener('click', () => modalBackdrop.classList.add('active'));
+        document.getElementById('btn-close-modal').addEventListener('click', () => modalBackdrop.classList.remove('active'));
+        modalBackdrop.addEventListener('click', e => { if (e.target === modalBackdrop) modalBackdrop.classList.remove('active'); });
+
+        // ---------- UPLOAD HELPERS ----------
+        async function uploadFileAndSave(file) {
+            const storageRef = ref(storage, `media/${Date.now()}_${file.name}`);
+            await uploadBytes(storageRef, file);
+            const url = await getDownloadURL(storageRef);
+            await addDoc(collection(db, "media"), {
+                filename: file.name,
+                type: file.type,
+                url: url,
+                liked: false
+            });
+        }
+
+        // ---------- ADD MEDIA (single/multiple) ----------
+        document.getElementById('btn-add-media').addEventListener('click', () => {
+            fileInput.click();
+            modalBackdrop.classList.remove('active');
+        });
+        fileInput.addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files);
+            for (const file of files) {
+                await uploadFileAndSave(file);
+            }
+            fileInput.value = '';
+            loadFeed();
+        });
+
+        // ---------- ADD FOLDER (webkitdirectory) ----------
+        document.getElementById('btn-add-folder').addEventListener('click', () => {
+            folderInput.click();
+            modalBackdrop.classList.remove('active');
+        });
+        folderInput.addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files).filter(f =>
+                f.type.startsWith('image/') || f.type.startsWith('video/')
+            );
+            if (files.length === 0) {
+                alert('No image/video files found in folder.');
+            } else {
                 for (const file of files) {
-                    const buffer = await file.arrayBuffer();
-                    const blob = new Blob([buffer], { type: file.type });
-                    await addMediaItem({ data: blob, type: file.type, filename: file.name, liked: false });
+                    await uploadFileAndSave(file);
                 }
             }
+            folderInput.value = '';
+            loadFeed();
+        });
 
-            // Placeholder buttons
-            document.getElementById('btn-comment').addEventListener('click', () => alert('Comments coming soon'));
-            document.getElementById('btn-favorite').addEventListener('click', () => alert('Favorites coming soon'));
+        // ---------- ADD FROM URL ----------
+        document.getElementById('btn-add-url').addEventListener('click', () => {
+            modalBackdrop.classList.remove('active');
+            const url = prompt('Paste the direct URL of an image/video:');
+            if (!url) return;
+            try { new URL(url); } catch { alert('Invalid URL'); return; }
+            fetch(url)
+                .then(res => res.blob())
+                .then(async blob => {
+                    const filename = url.split('/').pop().split('?')[0] || 'unknown';
+                    const file = new File([blob], filename, { type: blob.type || 'image/png' });
+                    await uploadFileAndSave(file);
+                    loadFeed();
+                })
+                .catch(() => alert('Failed to load media. Check the URL.'));
+        });
 
-            async function initApp() {
-                await openDB();
-                setGlobalMute(audioMuted);
-                await loadFeed();
+        // ---------- IMPORT ZIP ----------
+        document.getElementById('btn-import-zip').addEventListener('click', () => {
+            modalBackdrop.classList.remove('active');
+            zipInput.click();
+        });
+        zipInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            try {
+                const zip = await JSZip.loadAsync(file);
+                const entries = [];
+                zip.forEach((path, entry) => {
+                    if (!entry.dir) {
+                        const ext = path.split('.').pop().toLowerCase();
+                        if (['jpg','jpeg','png','gif','webp','bmp','svg','mp4','webm','ogg','mov','avi','mkv'].includes(ext)) {
+                            entries.push(entry);
+                        }
+                    }
+                });
+                if (entries.length === 0) { alert('No image/video files in ZIP.'); zipInput.value = ''; return; }
+                for (const entry of entries) {
+                    const blob = await entry.async('blob');
+                    const filename = entry.name.split('/').pop();
+                    const file = new File([blob], filename, { type: blob.type || 'image/png' });
+                    await uploadFileAndSave(file);
+                }
+                alert(`Imported ${entries.length} files.`);
+                zipInput.value = '';
+                loadFeed();
+            } catch (err) {
+                console.error(err);
+                alert('ZIP import failed. File may be too large.');
+                zipInput.value = '';
             }
+        });
 
-            window.addEventListener('load', initApp);
-        })();
+        // ---------- PLACEHOLDER BUTTONS ----------
+        document.getElementById('btn-comment').addEventListener('click', () => alert('Comments coming soon'));
+        document.getElementById('btn-favorite').addEventListener('click', () => alert('Favorites coming soon'));
+
+        // ---------- SHOW APP ----------
+        async function showApp() {
+            loginScreen.style.display = 'none';
+            appDiv.style.display = 'block';
+            await ensureAuth();
+            setMute(audioMuted);
+            await loadFeed();
+        }
+
+        // ---------- STARTUP ----------
+        window.addEventListener('load', () => {
+            if (sessionStorage.getItem('loggedIn') === 'true') {
+                showApp();
+                return;
+            }
+            setupPasswordUI();
+            loginScreen.style.display = 'flex';
+            appDiv.style.display = 'none';
+        });
     </script>
 </body>
 </html>
